@@ -5,9 +5,7 @@ namespace App;
 class GildedRose
 {
     public $name;
-
     public $quality;
-
     public $sellIn;
 
     public function __construct($name, $quality, $sellIn)
@@ -21,53 +19,82 @@ class GildedRose
         return new static($name, $quality, $sellIn);
     }
 
-    public function tick()
-    {
-        if ($this->name != 'Aged Brie' and $this->name != 'Backstage passes to a TAFKAL80ETC concert') {
-            if ($this->quality > 0) {
-                if ($this->name != 'Sulfuras, Hand of Ragnaros') {
-                    $this->quality = $this->quality - 1;
-                }
-            }
-        } else {
-            if ($this->quality < 50) {
-                $this->quality = $this->quality + 1;
+    public function tick() {
+        $category = ItemFactory::create($this);
+        $category->tick();
+    }
+}
 
-                if ($this->name == 'Backstage passes to a TAFKAL80ETC concert') {
-                    if ($this->sellIn < 11) {
-                        if ($this->quality < 50) {
-                            $this->quality = $this->quality + 1;
-                        }
-                    }
-                    if ($this->sellIn < 6) {
-                        if ($this->quality < 50) {
-                            $this->quality = $this->quality + 1;
-                        }
-                    }
-                }
-            }
+class ItemCategory {
+    public function __construct(protected GildedRose $item) {}
+
+    public function tick(): void {
+        $this->updateSellIn();
+        $this->updateQuality();
+    }
+
+    protected function updateSellIn(): void {
+        $this->item->sellIn--;
+    }
+
+    protected function increaseQuality(int $amount = 1): void {
+        $this->item->quality = min(50, $this->item->quality + $amount);
+    }
+
+    protected function decreaseQuality(int $amount = 1): void {
+        $this->item->quality = max(0, $this->item->quality - $amount);
+    }
+
+    protected function updateQuality(): void {
+        $degrade = ($this->item->sellIn < 0) ? 2 : 1;
+        $this->decreaseQuality($degrade);
+    }
+}
+
+class AgedBrie extends ItemCategory {
+    protected function updateQuality(): void {
+        $this->increaseQuality($this->item->sellIn < 0 ? 2 : 1);
+    }
+}
+
+class Sulfuras extends ItemCategory {
+    public function tick(): void {}
+}
+
+class BackstagePasses extends ItemCategory {
+    protected function updateQuality(): void {
+        if ($this->item->sellIn < 0) {
+            $this->item->quality = 0;
+            return;
         }
 
-        if ($this->name != 'Sulfuras, Hand of Ragnaros') {
-            $this->sellIn = $this->sellIn - 1;
+        $extra = 1;
+        
+        if ($this->item->sellIn < 5) {
+            $extra = 3;
+        } elseif ($this->item->sellIn < 10) {
+            $extra = 2;
         }
 
-        if ($this->sellIn < 0) {
-            if ($this->name != 'Aged Brie') {
-                if ($this->name != 'Backstage passes to a TAFKAL80ETC concert') {
-                    if ($this->quality > 0) {
-                        if ($this->name != 'Sulfuras, Hand of Ragnaros') {
-                            $this->quality = $this->quality - 1;
-                        }
-                    }
-                } else {
-                    $this->quality = $this->quality - $this->quality;
-                }
-            } else {
-                if ($this->quality < 50) {
-                    $this->quality = $this->quality + 1;
-                }
-            }
-        }
+        $this->increaseQuality($extra);
+    }
+}
+
+class Conjured extends ItemCategory {
+    protected function updateQuality(): void {
+        $degrade = ($this->item->sellIn < 0) ? 4 : 2;
+        $this->decreaseQuality($degrade);
+    }
+}
+
+class ItemFactory {
+    public static function create(GildedRose $item): ItemCategory {
+        return match (true) {
+            str_contains($item->name, 'Aged Brie') => new AgedBrie($item),
+            str_contains($item->name, 'Sulfuras') => new Sulfuras($item),
+            str_contains($item->name, 'Backstage passes') => new BackstagePasses($item),
+            str_contains($item->name, 'Conjured') => new Conjured($item),
+            default => new ItemCategory($item),
+        };
     }
 }
